@@ -390,19 +390,19 @@ function CalibratePane({ onProceedToTrack }: { onProceedToTrack?: () => void }) 
                 <div className="rounded-md bg-surface px-2 py-1.5">
                   <dt className="text-[10px] uppercase tracking-[0.14em] text-subtle">Span</dt>
                   <dd className="mt-0.5 text-xs font-semibold tabular text-fg">
-                    {vector.valid ? `${vector.travelSpanY}%` : "—"}
+                    {allCalibrated ? `${vector.travelSpanY}%` : "—"}
                   </dd>
                 </div>
                 <div className="rounded-md bg-surface px-2 py-1.5">
                   <dt className="text-[10px] uppercase tracking-[0.14em] text-subtle">Distance</dt>
                   <dd className="mt-0.5 text-xs font-semibold tabular text-fg">
-                    {vector.valid ? `${vector.totalDistance}%` : "—"}
+                    {allCalibrated ? `${vector.totalDistance}%` : "—"}
                   </dd>
                 </div>
                 <div className="rounded-md bg-surface px-2 py-1.5">
                   <dt className="text-[10px] uppercase tracking-[0.14em] text-subtle">Angle</dt>
                   <dd className="mt-0.5 text-xs font-semibold tabular text-fg">
-                    {vector.valid ? `${vector.angleDeg}°` : "—"}
+                    {allCalibrated ? `${vector.angleDeg}°` : "—"}
                   </dd>
                 </div>
               </dl>

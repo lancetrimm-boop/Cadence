@@ -244,7 +244,7 @@ export function ReferenceOverlay() {
             </Button>
           )}
 
-          {vector.valid && (
+          {allCalibrated && (
             <span className="hidden sm:inline rounded-sm bg-bg/75 px-2 py-1 text-[11px] tabular text-muted backdrop-blur-xs">
               Span: {vector.travelSpanY}% · Vector: {vector.angleDeg}°
             </span>
@@ -355,7 +355,11 @@ export function ReferenceOverlay() {
       )}
 
       {/* SVG Connecting Guidelines and Stroke Vectors */}
-      <svg className="pointer-events-none absolute inset-0 h-full w-full">
+      <svg
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        className="pointer-events-none absolute inset-0 h-full w-full"
+      >
         <defs>
           {/* Cyan Glow for Group A */}
           <filter id="glow-a" x="-20%" y="-20%" width="140%" height="140%">
@@ -370,11 +374,12 @@ export function ReferenceOverlay() {
         {/* Group A Line A1 -> A2 -> A3 (only if at least 2 points are placed) */}
         {ptsA.length >= 2 && (
           <polyline
-            points={ptsA.map((p) => `${p.x}%,${p.y}%`).join(" ")}
+            points={ptsA.map((p) => `${p.x},${p.y}`).join(" ")}
             fill="none"
             stroke="#38bdf8"
             strokeWidth="1.8"
             strokeDasharray="4 3"
+            vectorEffect="non-scaling-stroke"
             filter="url(#glow-a)"
             className="opacity-80"
           />
@@ -383,46 +388,50 @@ export function ReferenceOverlay() {
         {/* Group B Line B1 -> B2 -> B3 (only if at least 2 points are placed) */}
         {ptsB.length >= 2 && (
           <polyline
-            points={ptsB.map((p) => `${p.x}%,${p.y}%`).join(" ")}
+            points={ptsB.map((p) => `${p.x},${p.y}`).join(" ")}
             fill="none"
             stroke="#f59e0b"
             strokeWidth="1.8"
             strokeDasharray="4 3"
+            vectorEffect="non-scaling-stroke"
             filter="url(#glow-b)"
             className="opacity-80"
           />
         )}
 
         {/* Central Stroke Vector Axis from Centroid(A) to Centroid(B) */}
-        {vector.valid && (
+        {allCalibrated && (
           <>
             <line
-              x1={`${vector.centroidA.x}%`}
-              y1={`${vector.centroidA.y}%`}
-              x2={`${vector.centroidB.x}%`}
-              y2={`${vector.centroidB.y}%`}
+              x1={vector.centroidA.x}
+              y1={vector.centroidA.y}
+              x2={vector.centroidB.x}
+              y2={vector.centroidB.y}
               stroke="currentColor"
               strokeWidth="1.2"
               strokeDasharray="3 3"
+              vectorEffect="non-scaling-stroke"
               className="text-subtle/70"
             />
             <circle
-              cx={`${vector.centroidA.x}%`}
-              cy={`${vector.centroidA.y}%`}
-              r="4"
+              cx={vector.centroidA.x}
+              cy={vector.centroidA.y}
+              r="1.2"
               fill="#38bdf8"
               fillOpacity="0.4"
               stroke="#38bdf8"
               strokeWidth="1.5"
+              vectorEffect="non-scaling-stroke"
             />
             <circle
-              cx={`${vector.centroidB.x}%`}
-              cy={`${vector.centroidB.y}%`}
-              r="4"
+              cx={vector.centroidB.x}
+              cy={vector.centroidB.y}
+              r="1.2"
               fill="#f59e0b"
               fillOpacity="0.4"
               stroke="#f59e0b"
               strokeWidth="1.5"
+              vectorEffect="non-scaling-stroke"
             />
           </>
         )}
@@ -530,7 +539,7 @@ export function ReferenceOverlay() {
       })}
 
       {/* Axis Vector Midpoint Span Readout Pill */}
-      {vector.valid && (
+      {allCalibrated && (
         <div
           style={{
             left: `${(vector.centroidA.x + vector.centroidB.x) / 2}%`,

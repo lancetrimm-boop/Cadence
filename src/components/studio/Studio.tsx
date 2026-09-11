@@ -39,6 +39,7 @@ export function Studio() {
   const playing = useStudio((s) => s.playing);
   const toast = useStudio((s) => s.toast);
   const setToast = useStudio((s) => s.setToast);
+  const onExport = exportCurrent;
 
   const handleResizeStart = (e: PointerEvent<HTMLDivElement>) => {
     e.preventDefault();

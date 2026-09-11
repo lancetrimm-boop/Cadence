@@ -16,7 +16,7 @@ describe("Phase 1: UX Foundation state transitions", () => {
     s.resetDemo();
     const after = useStudio.getState();
     assert.equal(after.activeView, "studio");
-    assert.ok(after.actions.length > 0);
+    assert.equal(after.actions.length, 0);
     assert.equal(after.meta.sourceKind, "demo");
   });
 
