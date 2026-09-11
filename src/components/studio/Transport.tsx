@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   Pause,
   Play,
@@ -31,12 +32,20 @@ export function Transport({ onExport }: Props) {
   const actions = useStudio((s) => s.actions);
   const pos = interpolatePos(actions, playheadMs);
 
+  // Responsive breakpoint for transport button size (â‰¤640px => icon-sm)
+  const [isSmall, setIsSmall] = React.useState(() => typeof window !== "undefined" && window.innerWidth <= 640);
+  React.useEffect(() => {
+    const handler = () => setIsSmall(window.innerWidth <= 640);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-border bg-surface px-3 py-2">
       <div className="flex items-center gap-1">
         <Button
           variant="ghost"
-          size="icon-sm"
+          size={isSmall ? "icon-sm" : "icon"}
           aria-label="Jump to start"
           onClick={() => setPlayhead(0, true)}
         >
@@ -44,7 +53,7 @@ export function Transport({ onExport }: Props) {
         </Button>
         <Button
           variant="subtle"
-          size="icon"
+          size={isSmall ? "icon-sm" : "icon"}
           aria-label={playing ? "Pause" : "Play"}
           onClick={togglePlay}
           className="size-11 rounded-md"
@@ -64,24 +73,24 @@ export function Transport({ onExport }: Props) {
       </div>
 
       <div className="ml-auto flex items-center gap-1">
-        <Button variant="ghost" size="icon-sm" aria-label="Undo" disabled={!canUndo} onClick={undo}>
+        <Button variant="ghost" size={isSmall ? "icon-sm" : "icon"} aria-label="Undo" disabled={!canUndo} onClick={undo}>
           <Undo2 />
         </Button>
-        <Button variant="ghost" size="icon-sm" aria-label="Redo" disabled={!canRedo} onClick={redo}>
+        <Button variant="ghost" size={isSmall ? "icon-sm" : "icon"} aria-label="Redo" disabled={!canRedo} onClick={redo}>
           <Redo2 />
         </Button>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size={isSmall ? "icon-sm" : "icon"}
           aria-label="Zoom out"
           onClick={() => setZoom(zoom / 1.25)}
         >
           <ZoomOut />
         </Button>
-        <span className="w-10 text-center text-xs tabular text-muted">{zoom.toFixed(1)}×</span>
+        <span className="w-10 text-center text-xs tabular text-muted">{zoom.toFixed(1)}Ã—</span>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size={isSmall ? "icon-sm" : "icon"}
           aria-label="Zoom in"
           onClick={() => setZoom(zoom * 1.25)}
         >

@@ -6,6 +6,7 @@ import { Timeline } from "./Timeline";
 import { Transport } from "./Transport";
 import { Dropveil, VideoStage } from "./VideoStage";
 import { downloadText, serializeFunscript, slugify } from "@/lib/cadence/funscript";
+import { Button } from "@/components/ui/button";
 import { resample } from "@/lib/cadence/signal";
 import { useStudio } from "@/lib/cadence/store";
 import { cn } from "@/lib/utils";
@@ -15,10 +16,21 @@ const SCRIPT_PANEL_MIN = 112;
 const SCRIPT_PANEL_MAX = 360;
 
 export function Studio() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [showDrawer, setShowDrawer] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [help, setHelp] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [timelineHeight, setTimelineHeight] = useState(SCRIPT_PANEL_DEFAULT);
+
+  const [timelineHeight, setTimelineHeight] = useState(() => {
+    // Initial responsive default based on viewport width
+    if (typeof window === "undefined") return SCRIPT_PANEL_DEFAULT;
+    const w = window.innerWidth;
+    if (w >= 860) return 140;
+    if (w >= 640) return 120;
+    return 100;
+  });
   const [isPanelResizing, setIsPanelResizing] = useState(false);
   const isResizing = useRef(false);
   const startY = useRef(0);
@@ -58,79 +70,84 @@ export function Studio() {
 
   usePlayback(videoRef);
 
+  // Keyboard shortcuts, timeline resize clamping, and toast auto‑clear
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       const s = useStudio.getState();
-      if (e.key === " " || e.code === "Space") {
-        e.preventDefault();
-        s.togglePlay();
-      } else if (e.key === "?" || (e.shiftKey && e.key === "/")) {
-        setHelp((v) => !v);
-      } else if (e.key === "Escape") {
-        setHelp(false);
-        s.select(null);
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        const step = e.shiftKey ? 1000 : e.altKey ? 40 : 200;
-        s.setPlayhead(s.playheadMs - step, true);
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        const step = e.shiftKey ? 1000 : e.altKey ? 40 : 200;
-        s.setPlayhead(s.playheadMs + step, true);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        s.nudge(0, e.shiftKey ? 5 : 1);
-      } else if (e.key === "ArrowDown") {
-        e.preventDefault();
-        s.nudge(0, e.shiftKey ? -5 : -1);
-      } else if (e.key === "Home") {
-        s.setPlayhead(0, true);
-      } else if (e.key === "End") {
-        s.setPlayhead(s.meta.durationMs, true);
-      } else if (e.key === "Backspace" || e.key === "Delete") {
-        s.removeSelected();
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        if (e.shiftKey) s.redo();
-        else s.undo();
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y") {
-        e.preventDefault();
-        s.redo();
-      } else if (e.key === "n" || e.key === "N") {
-        const sample = resample(
-          s.samples.map((m) => ({ t: m.t, v: m.pos })),
-          s.playheadMs,
-        );
+      // space / play‑pause
+      if (e.key === " " || e.code === "Space") { e.preventDefault(); s.togglePlay(); }
+      // help toggle
+      else if (e.key === "?" || (e.shiftKey && e.key === "/")) { setHelp(v => !v); }
+      // escape – close help & clear selection
+      else if (e.key === "Escape") { setHelp(false); s.select(null); }
+      // arrow left / right – seek
+      else if (e.key === "ArrowLeft") { e.preventDefault(); const step = e.shiftKey ? 1000 : e.altKey ? 40 : 200; s.setPlayhead(s.playheadMs - step, true); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); const step = e.shiftKey ? 1000 : e.altKey ? 40 : 200; s.setPlayhead(s.playheadMs + step, true); }
+      // arrow up / down – nudge
+      else if (e.key === "ArrowUp") { e.preventDefault(); s.nudge(0, e.shiftKey ? 5 : 1); }
+      else if (e.key === "ArrowDown") { e.preventDefault(); s.nudge(0, e.shiftKey ? -5 : -1); }
+      // home / end – jump to start / end
+      else if (e.key === "Home") { s.setPlayhead(0, true); }
+      else if (e.key === "End") { s.setPlayhead(s.meta.durationMs, true); }
+      // delete / backspace – remove selected
+      else if (e.key === "Backspace" || e.key === "Delete") { s.removeSelected(); }
+      // undo / redo (⌘Z / ⌘Y)
+      else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) s.redo(); else s.undo(); }
+      else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y") { e.preventDefault(); s.redo(); }
+      // new point (N)
+      else if (e.key === "n" || e.key === "N") {
+        const sample = resample(s.samples.map(m => ({ t: m.t, v: m.pos })), s.playheadMs);
         s.addAction(s.playheadMs, Math.round(sample * 100));
-      } else if (e.key === "[") {
-        s.setZoom(s.zoom / 1.25);
-      } else if (e.key === "]") {
-        s.setZoom(s.zoom * 1.25);
-      } else if (e.key === "1") s.setStyle("signature");
+      }
+      // zoom
+      else if (e.key === "[") { s.setZoom(s.zoom / 1.25); }
+      else if (e.key === "]") { s.setZoom(s.zoom * 1.25); }
+      // style presets
+      else if (e.key === "1") s.setStyle("signature");
       else if (e.key === "2") s.setStyle("mechanical");
       else if (e.key === "3") s.setStyle("soft");
       else if (e.key === "4") s.setStyle("dense");
-      else if (e.key.toLowerCase() === "e" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        exportCurrent();
-      }
+      // export (⌘E / ⌃E)
+      else if (e.key.toLowerCase() === "e" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); exportCurrent(); }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const handleResize = () => {
+      setTimelineHeight(prev => {
+        const clamped = Math.max(SCRIPT_PANEL_MIN, Math.min(SCRIPT_PANEL_MAX, prev));
+        return clamped;
+      });
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", handleResize);
+    };
   }, []);
 
+  // Drawer detection based on viewport width
+  useEffect(() => {
+    const update = () => setShowDrawer(window.innerWidth <= 860);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  // Toast auto‑clear after 2.8 s
   useEffect(() => {
     if (!toast) return;
     const id = window.setTimeout(() => setToast(null), 2800);
     return () => window.clearTimeout(id);
   }, [toast, setToast]);
 
-  const onExport = () => exportCurrent();
 
+  // Attach container ref to main element
+  const mainRef = containerRef;
+
+  // JSX modifications start
   return (
     <main
+      ref={mainRef}
       className="studio-grid relative bg-bg text-fg"
       onDragEnter={(e) => {
         e.preventDefault();
@@ -154,7 +171,13 @@ export function Studio() {
 
       <div className="workspace min-h-0">
         <VideoStage videoRef={videoRef} />
-        <Inspector />
+        {/* Drawer toggle button when inspector is hidden on small screens */}
+        {showDrawer && !inspectorOpen && (
+          <Button variant="outline" size="sm" onClick={() => setInspectorOpen(true)} className="mx-auto my-2">
+            Show Inspector
+          </Button>
+        )}
+        {showDrawer ? (inspectorOpen && <Inspector />) : <Inspector />}
         <div className="area-dock flex flex-col min-h-0">
           {/* Draggable resize splitter between video and script timeline */}
           <div
