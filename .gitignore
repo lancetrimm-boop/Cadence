@@ -1,0 +1,33 @@
+﻿# Dependencies
+node_modules/
+
+# Build/output
+dist/
+build/
+.cache/
+.turbo/
+
+# Local/workspace tooling
+.grok/
+.tanstack/
+.vercel/
+
+# Generated/local artifacts
+artifacts/
+screenshots/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local machine files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local workspace lock file
+.node_modules.lock
