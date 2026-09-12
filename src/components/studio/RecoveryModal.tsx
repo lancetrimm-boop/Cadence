@@ -25,6 +25,7 @@ export function RecoveryModal() {
   return (
     <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 select-none">
       <div className="w-full max-w-md rounded-xl border border-amber-500/50 bg-surface/95 p-5 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150">
+        {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 text-amber-400">
             <div className="flex size-8 items-center justify-center rounded-lg bg-amber-500/15 border border-amber-500/30">
@@ -49,12 +50,14 @@ export function RecoveryModal() {
           </button>
         </div>
 
+        {/* Diagnostic explanation */}
         <div className="mt-3.5 rounded-lg border border-border/80 bg-elevated/70 p-3 text-xs text-muted leading-relaxed">
           Tracking confidence dropped below the acceptable threshold (
           <span className="font-medium text-fg">{Math.round(minConfidenceThreshold * 100)}%</span>
           ). Add reference points on visible landmark features to reacquire position without losing your tracking history.
         </div>
 
+        {/* Reference points list */}
         <div className="mt-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-fg">
@@ -67,38 +70,41 @@ export function RecoveryModal() {
               onClick={() => addRecoveryReference()}
               className="h-7 px-2.5 text-xs gap-1 border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
             >
-              <Plus className="size-3.5" />
+              <Plus className="size-3" />
               <span>Add Reference</span>
             </Button>
           </div>
 
           {recoveryReferences.length > 0 ? (
-            <div className="mt-2 space-y-1.5">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {recoveryReferences.map((ref) => (
                 <div
                   key={ref.id}
-                  className="flex items-center justify-between rounded-md border border-border/70 bg-elevated/50 px-2.5 py-1.5 text-xs"
+                  className="flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-300"
                 >
-                  <span className="font-mono text-muted">
-                    {ref.label} · ({Math.round(ref.x)}%, {Math.round(ref.y)}%) · target {ref.targetPoint}
+                  <span className="font-bold">{ref.label}:</span>
+                  <span className="font-mono text-[11px] text-muted">
+                    {Math.round(ref.x)}%, {Math.round(ref.y)}%
                   </span>
                   <button
                     type="button"
                     onClick={() => removeRecoveryReference(ref.id)}
-                    className="rounded p-0.5 text-subtle hover:text-fg"
+                    className="ml-1 text-amber-400/60 hover:text-amber-200"
+                    title="Remove reference point"
                   >
-                    <X className="size-3.5" />
+                    <X className="size-3" />
                   </button>
                 </div>
               ))}
             </div>
           ) : (
             <p className="mt-2 text-[11px] text-subtle italic">
-              Click &quot;Add Reference&quot; to drop anchor points around the feature on screen.
+              Click "Add Reference" to drop anchor points around the feature on screen.
             </p>
           )}
         </div>
 
+        {/* Reacquisition Hypothesis Result */}
         {proposedReacquisition && (
           <div className="mt-4 rounded-lg border border-border/90 bg-elevated/90 p-3">
             <div className="flex items-center justify-between text-xs">
@@ -121,6 +127,7 @@ export function RecoveryModal() {
           </div>
         )}
 
+        {/* Footer actions */}
         <div className="mt-5 flex items-center justify-between gap-2">
           <Button
             type="button"
