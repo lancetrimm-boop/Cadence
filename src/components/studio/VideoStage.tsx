@@ -1,301 +1,269 @@
-import { useEffect, type RefObject } from "react";
-import { Check, CornerDownRight, Flag } from "lucide-react";
+import React, { useEffect, useRef, useState, type RefObject } from "react";
+import { Film, Sparkles, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { demoPoseAt } from "@/lib/cadence/demo";
-import { interpolatePos } from "@/lib/cadence/funscript";
-import { formatTimecode } from "@/lib/cadence/format";
-import { useStudio, useCalibrationVector } from "@/lib/cadence/store";
+import { useStudio } from "@/lib/cadence/store";
 import { cn } from "@/lib/utils";
 import { ReferenceOverlay } from "./ReferenceOverlay";
 import { PrimaryTrackingOverlay } from "./PrimaryTrackingOverlay";
+import { InteractiveIndicatorOverlay } from "./InteractiveIndicatorOverlay";
+import { RecoveryModal } from "./RecoveryModal";
+import { ViewerZoomControls } from "./ViewerZoomControls";
 
-type Props = {
+type VideoStageProps = {
   videoRef: RefObject<HTMLVideoElement | null>;
 };
 
-export function VideoStage({ videoRef }: Props) {
-  const playheadMs = useStudio((s) => s.playheadMs);
+export function VideoStage({ videoRef }: VideoStageProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
   const videoUrl = useStudio((s) => s.videoUrl);
-  const sourceKind = useStudio((s) => s.meta.sourceKind);
+  const playing = useStudio((s) => s.playing);
+  const playheadMs = useStudio((s) => s.playheadMs);
   const durationMs = useStudio((s) => s.meta.durationMs);
-  const actions = useStudio((s) => s.actions);
-  const analysis = useStudio((s) => s.analysis);
-  const abRegion = useStudio((s) => s.abRegion);
-  const setRegionPoint = useStudio((s) => s.setRegionPoint);
-  const confirmAbRegion = useStudio((s) => s.confirmAbRegion);
-  const resetAbRegion = useStudio((s) => s.resetAbRegion);
+  const sourceKind = useStudio((s) => s.meta.sourceKind);
+  const sourceName = useStudio((s) => s.meta.sourceName);
   const setPlayhead = useStudio((s) => s.setPlayhead);
-  const updateVideoDuration = useStudio((s) => s.updateVideoDuration);
-  const isTrackingActive = useStudio((s) => s.isTrackingActive);
-  const updateTrackingForPlayhead = useStudio((s) => s.updateTrackingForPlayhead);
+  const resetDemo = useStudio((s) => s.resetDemo);
   const currentTrackingFrame = useStudio((s) => s.currentTrackingFrame);
-  const vector = useCalibrationVector();
 
-  // Keep duration synchronized with video element without running unsolicited fake analysis
+  const viewerTransform = useStudio((s) => s.viewerTransform);
+  const setViewerPan = useStudio((s) => s.setViewerPan);
+
+  const [isPanMode, setIsPanMode] = useState(false);
+  const [isDraggingPan, setIsDraggingPan] = useState(false);
+  const lastMousePos = useRef<{ x: number; y: number } | null>(null);
+
+  // Sync video play/pause and time with studio state
   useEffect(() => {
-    if (!videoUrl) return;
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !videoUrl) return;
 
-    const onMeta = () => {
-      const dur = Math.round((video.duration || 0) * 1000);
-      if (dur > 0) updateVideoDuration(dur);
-    };
-
-    if (video.readyState >= 1 && video.duration) {
-      onMeta();
-    } else {
-      video.addEventListener("loadedmetadata", onMeta, { once: true });
-      return () => video.removeEventListener("loadedmetadata", onMeta);
+    if (playing && video.paused) {
+      void video.play().catch(() => {});
+    } else if (!playing && !video.paused) {
+      video.pause();
     }
-  }, [videoUrl, videoRef, updateVideoDuration]);
+  }, [playing, videoUrl, videoRef]);
 
-  // Update Phase 3 optical tracking whenever playhead moves and tracking is active
   useEffect(() => {
-    if (isTrackingActive) {
-      updateTrackingForPlayhead(videoRef.current);
-    }
-  }, [playheadMs, isTrackingActive, updateTrackingForPlayhead, videoRef]);
+    const video = videoRef.current;
+    if (!video || !videoUrl) return;
 
-  // Position: either live funscript action interpolation, or resting baseline when actions empty
-  const hasRealActions = actions.length > 0;
-  const pos = hasRealActions ? interpolatePos(actions, playheadMs) : 0;
+    const targetTimeSec = playheadMs / 1000;
+    if (Math.abs(video.currentTime - targetTimeSec) > 0.08) {
+      video.currentTime = targetTimeSec;
+    }
+  }, [playheadMs, videoUrl, videoRef]);
+
+  // Demo visualizer rendering when sourceKind is "demo"
+  useEffect(() => {
+    if (sourceKind !== "demo" && videoUrl) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // Dark sleek stage backdrop
+    const bgGrad = ctx.createRadialGradient(w / 2, h / 2, 50, w / 2, h / 2, Math.max(w, h));
+    bgGrad.addColorStop(0, "#18181b");
+    bgGrad.addColorStop(1, "#09090b");
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Subtle grid
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+    ctx.lineWidth = 1;
+    const step = 40;
+    for (let x = 0; x < w; x += step) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+    }
+    for (let y = 0; y < h; y += step) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+
+    // Kinematic light sculpture visualization synced to playhead
+    const tSec = playheadMs / 1000;
+    const cycle = Math.sin(tSec * 2.8) * 0.5 + 0.5;
+    const beamY = h * (0.2 + cycle * 0.6);
+    const beamX = w * 0.5 + Math.sin(tSec * 0.7) * 20;
+
+    // Glowing core
+    const glowGrad = ctx.createRadialGradient(beamX, beamY, 5, beamX, beamY, 120);
+    glowGrad.addColorStop(0, "rgba(56, 189, 248, 0.85)");
+    glowGrad.addColorStop(0.3, "rgba(14, 165, 233, 0.35)");
+    glowGrad.addColorStop(1, "rgba(14, 165, 233, 0)");
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath();
+    ctx.arc(beamX, beamY, 120, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Core node
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(beamX, beamY, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Oscillating motion trail
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
+    ctx.lineWidth = 3;
+    for (let i = 0; i <= 30; i++) {
+      const pastT = tSec - (i * 0.03);
+      const pastCycle = Math.sin(pastT * 2.8) * 0.5 + 0.5;
+      const py = h * (0.2 + pastCycle * 0.6);
+      const px = w * 0.5 + Math.sin(pastT * 0.7) * 20;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }, [playheadMs, sourceKind, videoUrl]);
+
+  // Pan interaction handling
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (isPanMode || e.button === 1 || viewerTransform.zoom > 1) {
+      if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest(".pointer-events-auto")) {
+        return;
+      }
+      setIsDraggingPan(true);
+      lastMousePos.current = { x: e.clientX, y: e.clientY };
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingPan || !lastMousePos.current) return;
+    const dx = e.clientX - lastMousePos.current.x;
+    const dy = e.clientY - lastMousePos.current.y;
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
+    setViewerPan(viewerTransform.panX + dx, viewerTransform.panY + dy);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (isDraggingPan) {
+      setIsDraggingPan(false);
+      lastMousePos.current = null;
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+  };
+
+  const currentPos = currentTrackingFrame?.active ? 50 : 50;
+
+  const hasMedia = Boolean(videoUrl) || sourceKind === "demo" || sourceName !== "";
 
   return (
-    <section className="area-video relative min-h-0 bg-bg">
-      <div className="relative h-full min-h-40 overflow-hidden bg-elevated">
+    <div
+      ref={containerRef}
+      className={cn(
+        "area-video relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-bg select-none",
+        isPanMode && "cursor-grab active:cursor-grabbing",
+        viewerTransform.zoom > 1 && !isPanMode && "cursor-default",
+      )}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
+      {/* Zoom / Pan Container */}
+      <div
+        className="relative flex items-center justify-center transition-transform duration-75 ease-out"
+        style={{
+          transform: `translate3d(${viewerTransform.panX}px, ${viewerTransform.panY}px, 0) scale(${viewerTransform.zoom})`,
+          transformOrigin: "center center",
+          width: "100%",
+          height: "100%",
+        }}
+      >
         {videoUrl ? (
           <video
             ref={videoRef}
             src={videoUrl}
-            className="h-full w-full bg-bg object-contain"
             playsInline
-            preload="auto"
+            muted
+            className="max-h-full max-w-full rounded-sm object-contain shadow-2xl"
+            onTimeUpdate={(e) => {
+              const currentMs = Math.round(e.currentTarget.currentTime * 1000);
+              if (Math.abs(currentMs - playheadMs) > 120) {
+                setPlayhead(currentMs);
+              }
+            }}
           />
+        ) : sourceKind === "demo" ? (
+          <div className="relative flex h-full max-h-[85vh] w-full max-w-5xl items-center justify-center p-4">
+            <canvas
+              ref={canvasRef}
+              width={854}
+              height={480}
+              className="aspect-video w-full rounded-md border border-border/60 bg-black/90 object-contain shadow-2xl"
+            />
+          </div>
         ) : (
-          <DemoStage tMs={playheadMs} />
-        )}
-
-        {/* Phase 2: A–B Region Setup Bar (Active before confirmation) */}
-        {!abRegion.confirmed && (
-          <div className="absolute inset-x-0 top-3 z-30 mx-auto max-w-xl px-3 pointer-events-auto">
-            <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-lg border border-border/80 bg-surface/92 p-2.5 shadow-xl backdrop-blur-md">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-accent">
-                  <Flag className="size-3" />
-                  <span>Phase 2: Step 1 · Define A–B Region</span>
-                </div>
-                <div className="truncate text-xs text-muted">
-                  {abRegion.startMs === null && abRegion.endMs === null
-                    ? "Navigate video and set Point A (crest) and Point B (trough)"
-                    : abRegion.startMs !== null && abRegion.endMs === null
-                      ? `Point A set (${formatTimecode(abRegion.startMs)}) · Now navigate to trough & set Point B`
-                      : abRegion.startMs === null && abRegion.endMs !== null
-                        ? `Point B set (${formatTimecode(abRegion.endMs)}) · Now navigate to crest & set Point A`
-                        : `Span: ${formatTimecode(Math.min(abRegion.startMs!, abRegion.endMs!))} – ${formatTimecode(Math.max(abRegion.startMs!, abRegion.endMs!))} · Ready to confirm`}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <Button
-                  size="sm"
-                  variant={abRegion.startMs !== null ? "secondary" : "outline"}
-                  onClick={() => setRegionPoint("A")}
-                  className={cn(
-                    "h-7 px-2.5 text-xs font-medium gap-1",
-                    abRegion.startMs !== null && "border-sky-500/50 text-sky-400",
-                  )}
-                  title="Set Point A at current playhead"
-                >
-                  <span className="font-bold text-sky-400">A:</span>
-                  <span>{abRegion.startMs !== null ? formatTimecode(abRegion.startMs) : "Set A"}</span>
-                </Button>
-
-                <Button
-                  size="sm"
-                  variant={abRegion.endMs !== null ? "secondary" : "outline"}
-                  onClick={() => setRegionPoint("B")}
-                  className={cn(
-                    "h-7 px-2.5 text-xs font-medium gap-1",
-                    abRegion.endMs !== null && "border-amber-500/50 text-amber-400",
-                  )}
-                  title="Set Point B at current playhead"
-                >
-                  <span className="font-bold text-amber-400">B:</span>
-                  <span>{abRegion.endMs !== null ? formatTimecode(abRegion.endMs) : "Set B"}</span>
-                </Button>
-
-                {abRegion.startMs !== null && abRegion.endMs !== null && (
-                  <Button
-                    size="sm"
-                    onClick={confirmAbRegion}
-                    className="h-7 px-3 bg-accent text-accent-fg text-xs font-medium shadow-sm hover:opacity-90 transition-opacity gap-1"
-                  >
-                    <Check className="size-3" />
-                    Confirm A–B Region
-                  </Button>
-                )}
-
-                {(abRegion.startMs !== null || abRegion.endMs !== null) && (
-                  <button
-                    type="button"
-                    onClick={resetAbRegion}
-                    className="text-[11px] text-subtle hover:text-fg px-1.5 py-1"
-                    title="Clear region points"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
+          <div className="flex flex-col items-center justify-center gap-4 p-8 text-center">
+            <div className="flex size-16 items-center justify-center rounded-2xl border border-border/80 bg-surface text-muted">
+              <Film className="size-8" />
+            </div>
+            <div>
+              <h2 className="font-display text-base font-semibold text-fg">No Video Loaded</h2>
+              <p className="mt-1 text-xs text-muted">
+                Drag and drop a video file, or explore the built-in tracking demo sandbox.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button size="sm" variant="outline" onClick={resetDemo} className="gap-2">
+                <Sparkles className="size-3.5 text-accent" />
+                Launch Demo Sandbox
+              </Button>
             </div>
           </div>
         )}
 
-        {/* Phase 2: A–B Reference Points Overlay (Only shown once A–B region is confirmed) */}
-        {abRegion.confirmed && <ReferenceOverlay />}
+        {/* Phase 2: Six-Point Calibration Overlay */}
+        <ReferenceOverlay />
 
-        {/* Phase 3: Primary Points A & B Optical Tracking Overlay */}
-        {abRegion.confirmed && <PrimaryTrackingOverlay />}
+        {/* Phase 3: Primary Dual-Centroid Tracking Overlay */}
+        <PrimaryTrackingOverlay />
 
-        {analysis?.running ? (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-bg/70 px-6">
-            <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-elevated hairline">
-              <div
-                className="h-full rounded-full bg-accent transition-[width] duration-[var(--motion-fast)] ease-[var(--ease-out)]"
-                style={{ width: `${Math.round(analysis.progress * 100)}%` }}
-              />
-            </div>
-            <p className="text-xs text-muted tabular">{analysis.label}</p>
-          </div>
-        ) : null}
-
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between p-3">
-          <div className="rounded-sm bg-bg/70 px-2 py-1 text-xs uppercase tracking-[0.14em] text-muted">
-            {sourceKind === "demo" ? "Demo sandbox" : sourceKind === "video" ? "Video source" : "Script only"}
-          </div>
-          <div className="rounded-sm bg-bg/70 px-2 py-1 text-xs tabular text-fg">
-            {formatTimecode(playheadMs, false)}
-            <span className="text-subtle"> / {formatTimecode(durationMs, false)}</span>
-          </div>
-        </div>
-
-        {/* Vertical Motion Indicator (Working, inactive when no funscript actions exist) */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-end justify-between p-3">
-          <Meter value={pos} travelSpan={vector.travelSpanY} active={hasRealActions} />
-        </div>
+        {/* Phase 3: Interactive Bounding Indicator Overlay */}
+        <InteractiveIndicatorOverlay containerRef={containerRef} currentPos={currentPos} />
       </div>
-    </section>
-  );
-}
 
-function DemoStage({ tMs }: { tMs: number }) {
-  const pose = demoPoseAt(tMs);
-  const bottom = 10 + pose.pos * 56;
-  const handBottom = 10 + pose.hand * 56;
-  const glow = 0.22 + pose.energy * 0.38;
+      {/* Recovery Modal Dialog */}
+      <RecoveryModal />
 
-  return (
-    <div className="relative h-full w-full overflow-hidden bg-bg">
-      <div
-        className="absolute inset-0"
-        style={{ transform: `translateX(${-pose.cameraX * 22}%)` }}
-      >
-        <div
-          className="absolute inset-x-0 bottom-0 top-[58%] opacity-30"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle, color-mix(in oklab, var(--color-fg) 55%, transparent) 1.1px, transparent 1.2px)",
-            backgroundSize: "28px 22px",
-            backgroundPosition: "center top",
-          }}
-        />
-        <div className="absolute inset-x-0 top-[58%] h-px bg-fg/15" />
-
-        <div
-          className="absolute left-1/2 w-10 rounded-full"
-          style={{
-            height: "18%",
-            bottom: `${bottom}%`,
-            transform: "translateX(-50%)",
-            background:
-              "linear-gradient(180deg, var(--color-fg) 0%, var(--color-signal) 70%, color-mix(in oklab, var(--color-signal) 55%, black) 100%)",
-            boxShadow: `0 0 32px 10px color-mix(in oklab, var(--color-signal) ${Math.round(glow * 70)}%, transparent)`,
-          }}
-        />
-        <div
-          className="absolute left-1/2 size-2.5 rounded-full bg-signal"
-          style={{
-            bottom: `${handBottom + 4}%`,
-            transform: "translateX(160%)",
-            opacity: 0.5 + pose.energy * 0.4,
-          }}
-        />
-        <div
-          className="absolute left-1/2 w-8 rounded-full bg-fg/20"
-          style={{
-            height: "7%",
-            bottom: "7%",
-            transform: "translateX(-50%)",
-            filter: "blur(8px)",
-            opacity: 0.35 + pose.pos * 0.25,
-          }}
-        />
-      </div>
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse at center, transparent 35%, color-mix(in oklab, var(--color-bg) 70%, transparent) 100%)",
-        }}
+      {/* Viewer Zoom & Pan Controls */}
+      <ViewerZoomControls
+        isPanMode={isPanMode}
+        onTogglePanMode={() => setIsPanMode(!isPanMode)}
       />
-      {pose.cut > 0.18 ? (
-        <div className="absolute inset-0 bg-fg" style={{ opacity: pose.cut * 0.32 }} />
-      ) : null}
-    </div>
-  );
-}
-
-function Meter({ value, travelSpan, active = true }: { value: number; travelSpan?: number; active?: boolean }) {
-  return (
-    <div className="flex items-end gap-2 select-none">
-      <div className="relative flex h-16 w-3.5 flex-col justify-end overflow-hidden rounded-xs bg-bg/85 backdrop-blur-xs hairline">
-        <div
-          className={cn(
-            "w-full transition-[height] duration-75 ease-out",
-            active ? "bg-accent" : "bg-subtle/30",
-          )}
-          style={{ height: `${active ? Math.max(0, Math.min(100, value)) : 0}%` }}
-        />
-      </div>
-      <div className="rounded-sm bg-bg/85 px-2 py-1 backdrop-blur-xs hairline">
-        <div className="text-[10px] uppercase tracking-[0.14em] text-subtle">
-          {active ? "Pos" : "Pos (Idle)"}
-        </div>
-        <div className="text-sm font-medium tabular text-fg">
-          {active ? Math.round(value) : "—"}
-        </div>
-      </div>
-      {travelSpan !== undefined && travelSpan > 0 && (
-        <div className="hidden sm:block rounded-sm bg-bg/85 px-2 py-1 backdrop-blur-xs hairline">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-subtle">Ref Span</div>
-          <div className="text-sm font-medium tabular text-fg">{travelSpan}%</div>
-        </div>
-      )}
     </div>
   );
 }
 
 export function Dropveil({ active }: { active: boolean }) {
+  if (!active) return null;
+
   return (
-    <div
-      className={cn(
-        "pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-bg/80 transition-opacity duration-[var(--motion-fast)] ease-[var(--ease-out)]",
-        active ? "opacity-100" : "opacity-0",
-      )}
-    >
-      <div className="rounded-lg border border-dashed border-accent/40 px-8 py-6 text-center">
-        <p className="font-display text-2xl text-fg">Drop a video</p>
-        <p className="mt-1 text-sm text-muted">Or a .funscript to overlay</p>
+    <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-bg/85 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-accent bg-surface/95 p-8 text-center shadow-2xl">
+        <div className="flex size-14 items-center justify-center rounded-xl bg-accent/15 text-accent">
+          <Upload className="size-7" />
+        </div>
+        <div>
+          <h3 className="font-display text-base font-semibold text-fg">Drop Video or Funscript</h3>
+          <p className="mt-1 text-xs text-muted">Supports MP4, WebM, MOV, and .funscript JSON files</p>
+        </div>
       </div>
     </div>
   );
