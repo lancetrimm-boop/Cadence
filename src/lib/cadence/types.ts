@@ -153,7 +153,74 @@ export type CalibrationVector = {
 // Phase 3: Optical Tracking Types
 // ==========================================
 
-export type TrackedPointStatus = "tracking" | "searching" | "unknown" | "lost";
+export type TrackedPointStatus =
+  | "tracking"
+  | "searching"
+  | "unknown"
+  | "lost"
+  | "low_confidence"
+  | "reacquiring"
+  | "reacquired";
+
+export type PrimaryPointId = "A" | "B";
+
+export type PrimaryPointState = {
+  id: PrimaryPointId;
+  label: string;
+  x: number | null;
+  y: number | null;
+  set: boolean;
+  status: TrackedPointStatus;
+  confidence: number;
+};
+
+export type PrimarySetupStep =
+  | "idle"
+  | "set_a"
+  | "set_b"
+  | "ready"
+  | "tracking"
+  | "recovery";
+
+export type RecoveryReferencePoint = {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  targetPoint: "A" | "B" | "both";
+};
+
+export type TrackingHistoryEntry = {
+  tMs: number;
+  ax: number | null;
+  ay: number | null;
+  bx: number | null;
+  by: number | null;
+  confA: number;
+  confB: number;
+  overallConfidence: number;
+  status: TrackedPointStatus;
+  movement: number; // 0 to 100 normalized movement
+  spanY: number | null;
+  distance: number | null;
+};
+
+export type InteractiveIndicator = {
+  enabled: boolean;
+  x: number; // % in video coords (center X)
+  y: number; // % in video coords (center Y)
+  width: number; // % in video coords
+  height: number; // % in video coords
+  rotation: number; // in degrees (-180 to 180)
+  selected: boolean;
+  contrastOutline: boolean;
+};
+
+export type ViewerTransform = {
+  zoom: number; // 1 to 8 (100% to 800%)
+  panX: number; // in pixels
+  panY: number; // in pixels
+};
 
 export type PrimaryTrackedPointId = "Primary_A" | "Primary_B";
 
@@ -200,8 +267,10 @@ export type OpticalTrackingFrame = {
 export type OpticalTrackingSettings = {
   /** Master toggle for optical tracking engine */
   enabled: boolean;
-  /** Minimum confidence threshold required to accept position (0 to 1). Below this, status is unknown */
+  /** Minimum confidence threshold required to accept position (0 to 1). Below this, status is unknown/low_confidence */
   minConfidenceThreshold: number;
+  /** Number of consecutive low-confidence frames before pausing for recovery */
+  debounceFrames: number;
   /** Search radius around reference centroid in % of frame dimensions */
   searchRadiusPct: number;
   /** Show Primary Points A and B on the video canvas */
@@ -210,5 +279,10 @@ export type OpticalTrackingSettings = {
   showSearchBorders: boolean;
   /** Show displacement vector arrows from reference centroids to primary points */
   showDisplacementVectors: boolean;
+  /** Show interactive indicator overlay on the video stage */
+  showIndicator: boolean;
+  /** Show the auto-tracking movement curve graph */
+  showTrackingGraph: boolean;
+  /** Automatically pause playback when confidence failure persists beyond debounce */
+  autoPauseOnFailure: boolean;
 };
-
