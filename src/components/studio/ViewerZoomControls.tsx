@@ -10,55 +10,93 @@ type Props = {
 };
 
 export function ViewerZoomControls({ isPanMode, onTogglePanMode }: Props) {
-  const zoom = useStudio((s) => s.viewerTransform.zoom);
-  const setZoom = useStudio((s) => s.setViewerZoom);
-  const reset = useStudio((s) => s.resetViewerTransform);
+  const viewerTransform = useStudio((s) => s.viewerTransform);
+  const setViewerZoom = useStudio((s) => s.setViewerZoom);
+  const resetViewerTransform = useStudio((s) => s.resetViewerTransform);
+
+  const zoomPercent = Math.round(viewerTransform.zoom * 100);
+
+  const handleZoomIn = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setViewerZoom(viewerTransform.zoom * 1.25);
+  };
+
+  const handleZoomOut = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setViewerZoom(viewerTransform.zoom / 1.25);
+  };
+
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    resetViewerTransform();
+  };
 
   return (
-    <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1 rounded-lg border border-zinc-700/80 bg-zinc-900/90 p-1 shadow-lg backdrop-blur-sm">
+    <div
+      className="absolute bottom-3 right-3 z-30 flex items-center gap-1 rounded-md border border-border/80 bg-surface/90 p-1 shadow-lg backdrop-blur-md select-none"
+      onClick={(e) => e.stopPropagation()}
+    >
       <Button
+        type="button"
         size="icon"
         variant="ghost"
-        className="h-8 w-8 text-zinc-300 hover:text-white"
-        onClick={() => setZoom(Math.max(1, zoom - 0.25))}
-        title="Zoom out"
+        onClick={handleZoomOut}
+        disabled={viewerTransform.zoom <= 1.01}
+        className="size-7 rounded text-muted hover:text-fg hover:bg-elevated/80 disabled:opacity-35"
+        title="Zoom Out (-)"
       >
-        <ZoomOut className="h-4 w-4" />
+        <ZoomOut className="size-3.5" />
       </Button>
-      <span className="min-w-[3.5rem] text-center text-xs tabular-nums text-zinc-400">
-        {Math.round(zoom * 100)}%
-      </span>
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-8 w-8 text-zinc-300 hover:text-white"
-        onClick={() => setZoom(Math.min(8, zoom + 0.25))}
-        title="Zoom in"
+
+      <button
+        type="button"
+        onClick={handleReset}
+        className="min-w-12 px-1 text-center font-mono text-xs font-semibold tabular text-fg hover:text-accent transition-colors"
+        title="Reset Zoom & Pan (Fit 100%)"
       >
-        <ZoomIn className="h-4 w-4" />
-      </Button>
-      <div className="mx-1 h-4 w-px bg-zinc-700" />
+        {zoomPercent}%
+      </button>
+
       <Button
+        type="button"
         size="icon"
         variant="ghost"
-        className={cn(
-          "h-8 w-8 text-zinc-300 hover:text-white",
-          isPanMode && "bg-zinc-700 text-white"
-        )}
+        onClick={handleZoomIn}
+        disabled={viewerTransform.zoom >= 7.9}
+        className="size-7 rounded text-muted hover:text-fg hover:bg-elevated/80 disabled:opacity-35"
+        title="Zoom In (+)"
+      >
+        <ZoomIn className="size-3.5" />
+      </Button>
+
+      <div className="mx-0.5 h-4 w-px bg-border/80" />
+
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
         onClick={onTogglePanMode}
-        title="Pan mode"
+        className={cn(
+          "size-7 rounded transition-colors",
+          isPanMode ? "bg-accent text-accent-fg" : "text-muted hover:text-fg hover:bg-elevated/80",
+        )}
+        title={isPanMode ? "Pan tool active (drag video to pan)" : "Pan tool (or hold Space to drag)"}
       >
-        <Move className="h-4 w-4" />
+        <Move className="size-3.5" />
       </Button>
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-8 w-8 text-zinc-300 hover:text-white"
-        onClick={reset}
-        title="Reset view"
-      >
-        <Maximize2 className="h-4 w-4" />
-      </Button>
+
+      {viewerTransform.zoom > 1.05 && (
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          onClick={handleReset}
+          className="size-7 rounded text-muted hover:text-fg hover:bg-elevated/80"
+          title="Reset transform to 100%"
+        >
+          <Maximize2 className="size-3.5" />
+        </Button>
+      )}
     </div>
   );
 }
